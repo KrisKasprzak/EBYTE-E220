@@ -71,6 +71,10 @@ The test setup: a Teensy 4.0 (left) and an ESP32 DevKit V1 (right), each wired t
 
 ## Quick start
 
+These two sketches go together. The sender, at address `0x0001`, sends "Hello" every 5 seconds to the receiver at address `0x0002`. Both use channel 18 in fixed transmission mode.
+
+### Sender
+
 ```cpp
 #include <EBYTE-E220.h>
 
@@ -97,6 +101,48 @@ void setup() {
 void loop() {
     radio.sendFixedMessage(0x0002, 18, "Hello");
     delay(5000);
+}
+```
+
+### Receiver
+
+```cpp
+#include <EBYTE-E220.h>
+
+EBYTE_E220_UART radio(&Serial1, /*M0*/ 7, /*M1*/ 6, /*AUX*/ 5, E220_MODEL_900T22);
+
+uint8_t rxBuffer[E220_MAX_PACKET_SIZE + 1];    // +1 for the string terminator
+
+void setup() {
+    Serial.begin(115200);
+    Serial1.begin(9600);
+
+    if (radio.begin() != E220_SUCCESS) {      // also reads the current settings
+        Serial.println("E220 not found");
+    }
+
+    radio.setAddress(0x0002);                  // the address the sender sends to
+    radio.setChannel(18);                      // must match the sender
+    radio.setAirDataRate(E220_AIR_2K4);        // must match the sender
+    radio.setTransmissionMethod(E220_TX_FIXED);
+    radio.setPacketRSSIEnabled(true);          // module adds an RSSI byte to each packet
+    radio.saveParameters(E220_SAVE_PERMANENT); // or E220_SAVE_TEMPORARY
+
+    radio.printParameters(Serial);
+}
+
+void loop() {
+    if (radio.available()) {
+        uint16_t rxLength = radio.receiveMessage(rxBuffer, E220_MAX_PACKET_SIZE);
+        if (rxLength > 0) {
+            rxBuffer[rxLength] = '\0';         // received text is not null-terminated
+            Serial.print("Received: ");
+            Serial.print((char*)rxBuffer);
+            Serial.print("  RSSI: ");
+            Serial.print(radio.getReceivedPacketRSSI());   // RSSI byte already removed from rxBuffer
+            Serial.println(" dBm");
+        }
+    }
 }
 ```
 
